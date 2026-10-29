@@ -10,6 +10,7 @@ const router = express.Router();
 router.get("/", getConversations);
 
 
+router.get("/:conversationId", getConversationMessages);
 router.get("/:conversationId/messages", getConversationMessages);
 
 export default router;

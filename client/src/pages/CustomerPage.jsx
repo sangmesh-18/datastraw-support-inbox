@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { customerService } from '../services/customer.service';
+import { customerService, customerSessionStorage } from '../services/customer.service';
 import { useToast } from '../hooks/useToast';
 import { generateUUID } from '../utils/validators';
 import { CustomerIdentityForm } from '../components/customer/CustomerIdentityForm';
@@ -7,7 +7,18 @@ import { CustomerChat } from '../components/customer/CustomerChat';
 import { MessageSquare, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
-const SESSION_STORAGE_KEY = 'datastraw_demo_customer_session';
+const SESSION_STORAGE_KEY = 'datastraw_demo_customer_identity';
+
+const createDefaultGuestIdentity = () => {
+  const randSuffix = Math.floor(1000000 + Math.random() * 9000000);
+  return {
+    id: `guest_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`,
+    name: 'Guest Customer',
+    phone: `+1555${randSuffix}`,
+    brand_id: 'verdant-co',
+    conversationId: null,
+  };
+};
 
 export function CustomerPage() {
   const toast = useToast();
@@ -18,24 +29,20 @@ export function CustomerPage() {
       const saved = sessionStorage.getItem(SESSION_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return {
-          id: parsed.id || 'customer_demo_101',
-          name: parsed.name || 'Aisha Sharma',
-          phone: parsed.phone || '+919876543210',
-          brand_id: parsed.brand_id || 'verdant-co',
-          conversationId: parsed.conversationId || 'cmvt0wja10001s8uvv359rib0',
-        };
+        if (parsed.id && parsed.name && parsed.phone) {
+          return {
+            id: parsed.id,
+            name: parsed.name,
+            phone: parsed.phone,
+            brand_id: parsed.brand_id || 'verdant-co',
+            conversationId: parsed.conversationId || null,
+          };
+        }
       }
     } catch {
       // Storage unavailable
     }
-    return {
-      id: 'customer_demo_101',
-      name: 'Aisha Sharma',
-      phone: '+919876543210',
-      brand_id: 'verdant-co',
-      conversationId: 'cmvt0wja10001s8uvv359rib0',
-    };
+    return createDefaultGuestIdentity();
   });
 
   const [messages, setMessages] = useState([]);
@@ -46,7 +53,7 @@ export function CustomerPage() {
 
   const isFetchingRef = useRef(false);
 
-  // Sync session storage when identity changes
+  // Sync identity to session storage
   useEffect(() => {
     try {
       sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(identity));
@@ -55,10 +62,12 @@ export function CustomerPage() {
     }
   }, [identity]);
 
-  // Fetch customer conversation messages
+  // Fetch customer conversation messages strictly for this session
   const fetchMessages = useCallback(
     async (isBackground = false) => {
-      if (!identity.conversationId || isFetchingRef.current) return;
+      // Require an active session token and conversation ID
+      const hasToken = Boolean(customerSessionStorage.get());
+      if (!hasToken || isFetchingRef.current) return;
       isFetchingRef.current = true;
 
       if (!isBackground) {
@@ -68,11 +77,12 @@ export function CustomerPage() {
       }
 
       try {
-        const response = await customerService.getCustomerConversationMessages(
-          identity.conversationId
-        );
+        const response = await customerService.getCustomerConversation(identity.conversationId);
         if (response?.conversation?.messages) {
           setMessages(response.conversation.messages);
+        } else if (response?.conversation === null && identity.conversationId) {
+          // If session is expired or belongs to another conversation
+          setMessages([]);
         }
       } catch (err) {
         if (!isBackground) {
@@ -87,19 +97,18 @@ export function CustomerPage() {
     [identity.conversationId, toast]
   );
 
-  // Initial load via microtask
+  // Initial load on page mount
   useEffect(() => {
     let ignore = false;
+    const hasToken = Boolean(customerSessionStorage.get());
 
-    if (identity.conversationId) {
+    if (hasToken && identity.conversationId) {
       Promise.resolve().then(async () => {
         if (ignore) return;
         setIsLoadingMessages(true);
 
         try {
-          const response = await customerService.getCustomerConversationMessages(
-            identity.conversationId
-          );
+          const response = await customerService.getCustomerConversation(identity.conversationId);
           if (!ignore && response?.conversation?.messages) {
             setMessages(response.conversation.messages);
           }
@@ -120,7 +129,7 @@ export function CustomerPage() {
     };
   }, [identity.conversationId, toast]);
 
-  // Auto-refresh interval (polling for new agent replies every 4 seconds)
+  // Auto-refresh interval (polling for approved agent replies every 4 seconds)
   useEffect(() => {
     if (!autoRefresh || !identity.conversationId) return;
 
@@ -156,13 +165,15 @@ export function CustomerPage() {
 
       toast.success('Message sent! Waiting for support team review.');
 
-      if (response.conversationId) {
+      // Save verified conversationId returned from the server
+      if (response.conversationId && response.conversationId !== identity.conversationId) {
         setIdentity((prev) => ({
           ...prev,
           conversationId: response.conversationId,
         }));
       }
 
+      // Optimistically append customer's message to timeline
       setMessages((prev) => [
         ...prev,
         {
@@ -173,10 +184,9 @@ export function CustomerPage() {
         },
       ]);
 
+      // Re-fetch in background to sync database state
       setTimeout(() => {
-        if (response.conversationId || identity.conversationId) {
-          fetchMessages(true);
-        }
+        fetchMessages(true);
       }, 500);
     } catch (err) {
       toast.error(err.message || 'Failed to send message');
@@ -185,18 +195,13 @@ export function CustomerPage() {
     }
   };
 
+  // Reset to start a completely fresh, isolated customer session
   const handleResetSession = () => {
-    const newId = `cust_${Date.now().toString(36)}`;
-    const newIdentity = {
-      id: newId,
-      name: 'New Visitor',
-      phone: '+919999900000',
-      brand_id: 'verdant-co',
-      conversationId: null,
-    };
+    customerService.clearCustomerSession();
+    const newIdentity = createDefaultGuestIdentity();
     setIdentity(newIdentity);
     setMessages([]);
-    toast.info('Started a new customer session');
+    toast.info('Started a new isolated customer session');
   };
 
   return (
@@ -206,13 +211,13 @@ export function CustomerPage() {
         <div className="banner-content">
           <div className="banner-title-row">
             <MessageSquare size={18} className="text-indigo" />
-            <span className="banner-badge">Demo Mode</span>
+            <span className="banner-badge">Public Test</span>
             <h3>Customer Chat Simulation</h3>
           </div>
           <p className="banner-text">
-            Simulates an external customer messaging Verdant Co. In this view, you can submit
-            inquiries and verify that AI-generated reply drafts remain strictly confidential until an
-            agent explicitly approves them in the Agent Inbox.
+            Simulates a customer inquiry. Each browser session is cryptographically isolated
+            with a secure session token. AI drafts are strictly kept confidential and only approved
+            agent replies appear in this chat.
           </p>
         </div>
 
@@ -229,19 +234,32 @@ export function CustomerPage() {
         <aside className="customer-sidebar-column">
           <CustomerIdentityForm
             identity={identity}
-            onChange={setIdentity}
+            onChange={(newIdentity) => {
+              // If user switches identity (e.g. clicks preset), reset session so messages do not cross-contaminate
+              const idChanged = newIdentity.id !== identity.id;
+              const phoneChanged = newIdentity.phone !== identity.phone;
+              if (idChanged || phoneChanged) {
+                customerService.clearCustomerSession();
+                setIdentity({
+                  ...newIdentity,
+                  conversationId: null,
+                });
+                setMessages([]);
+              } else {
+                setIdentity(newIdentity);
+              }
+            }}
             onResetSession={handleResetSession}
             disabled={isSending}
           />
 
           <div className="customer-docs-tip">
-            <h5>How to Test Human-in-the-Loop AI:</h5>
+            <h5>How Session Isolation Works:</h5>
             <ol>
-              <li>Type a customer inquiry below (e.g. &ldquo;Where is my order?&rdquo;) and click Send.</li>
-              <li>Switch to the <strong>Agent Inbox</strong> tab to see the incoming message.</li>
-              <li>Observe Gemini generating the draft in real-time.</li>
-              <li>Edit the draft text and click <strong>Approve &amp; Send Reply</strong>.</li>
-              <li>Return here to watch the approved reply appear instantly!</li>
+              <li>When you send a message, the server assigns an unguessable session token.</li>
+              <li>Your chat only displays your conversation. Other customers cannot read it.</li>
+              <li>AI draft responses are generated in the background, but remain hidden here until an agent approves them.</li>
+              <li>Click &ldquo;New Session&rdquo; anytime to test a completely independent customer thread.</li>
             </ol>
           </div>
         </aside>

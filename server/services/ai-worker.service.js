@@ -1,4 +1,3 @@
-
 import { prisma } from "../prisma.js";
 import { generateReplyDraft } from "./ai.service.js";
 
@@ -86,9 +85,6 @@ const runWorker = async () => {
   workerRunning = true;
 
   try {
-    // Recover messages left processing after a server restart.
-   
-
     while (true) {
       const message = await prisma.message.findFirst({
         where: {
@@ -116,8 +112,14 @@ export const startAIWorker = () => {
 
   prisma.message
     .updateMany({
-      where: { aiProcessingStatus: "PROCESSING" },
-      data: { aiProcessingStatus: "PENDING" },
+      where: {
+        aiProcessingStatus: { in: ["PROCESSING", "FAILED"] },
+        draft: null,
+      },
+      data: {
+        aiProcessingStatus: "PENDING",
+        aiProcessingAttempts: 0,
+      },
     })
     .then(() => {
       const poll = async () => {

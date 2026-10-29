@@ -1,6 +1,6 @@
-
 import { prisma } from "../prisma.js";
 
+// Protected Agent Endpoint: List all conversations
 export const getConversations = async (req, res) => {
   try {
     const conversations = await prisma.conversation.findMany({
@@ -33,7 +33,7 @@ export const getConversations = async (req, res) => {
   }
 };
 
-
+// Protected Agent Endpoint: Get conversation messages with AI drafts
 export const getConversationMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
@@ -76,10 +76,18 @@ export const getConversationMessages = async (req, res) => {
   }
 };
 
-
+// Customer-safe conversation messages endpoint
 export const getCustomerConversationMessages = async (req, res) => {
   try {
     const { conversationId } = req.params;
+
+    // Defense in depth: If a customer session is present, verify ownership
+    if (req.customerSession && req.customerSession.conversationId !== conversationId) {
+      return res.status(404).json({
+        success: false,
+        message: "Conversation not found",
+      });
+    }
 
     const conversation = await prisma.conversation.findUnique({
       where: {
@@ -92,10 +100,7 @@ export const getCustomerConversationMessages = async (req, res) => {
           where: {
             OR: [
               { sender: "CUSTOMER" },
-              {
-                sender: "AGENT",
-                // Agent replies are saved as messages only after approval.
-              },
+              { sender: "AGENT" }, // Agent replies only visible once approved
             ],
           },
           orderBy: {

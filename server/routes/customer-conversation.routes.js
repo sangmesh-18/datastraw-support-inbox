@@ -1,14 +1,14 @@
-
 import express from "express";
-import {
-  getCustomerConversationMessages,
-} from "../controllers/conversation.controller.js";
+import { getCustomerConversationMessagesById } from "../controllers/customer.controller.js";
+import { authenticateCustomerSession } from "../middleware/customer-session.middleware.js";
 
 const router = express.Router();
 
+// Protected customer conversation route - strictly requires verified customer session
 router.get(
   "/:conversationId/customer-messages",
-  getCustomerConversationMessages
+  authenticateCustomerSession,
+  getCustomerConversationMessagesById
 );
 
 export default router;

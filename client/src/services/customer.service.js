@@ -1,30 +1,59 @@
 import { apiRequest } from './api';
 
+const CUSTOMER_SESSION_TOKEN_KEY = 'datastraw_customer_session_token';
+
+export const customerSessionStorage = {
+  get: () => {
+    try {
+      return sessionStorage.getItem(CUSTOMER_SESSION_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  },
+  set: (token) => {
+    try {
+      if (token) {
+        sessionStorage.setItem(CUSTOMER_SESSION_TOKEN_KEY, token);
+      }
+    } catch {
+      // Storage unavailable
+    }
+  },
+  remove: () => {
+    try {
+      sessionStorage.removeItem(CUSTOMER_SESSION_TOKEN_KEY);
+    } catch {
+      // Storage unavailable
+    }
+  },
+};
+
 export const customerService = {
   /**
-   * Submit a customer message (public endpoint, simulates customer channel / webhook)
-   * @param {{
-   *   customer: { id: string, name: string, phone: string },
-   *   message: { id: string, text: string },
-   *   brand_id?: string
-   * }} payload
-   * @returns {Promise<{ success: boolean, message: string, customerId: string, conversationId: string, messageId: string }>}
+   * Submit a customer message.
+   * If an active customer session exists, sends the session token in the headers
+   * so the backend strictly appends to the verified conversation.
+   * If no session exists, the backend initializes one and returns a sessionToken.
    */
   async sendCustomerMessage({ customer, message, brand_id = 'verdant-co' }) {
-    if (!customer?.id || !customer?.name?.trim() || !customer?.phone?.trim()) {
-      throw new Error('Customer ID, Name, and Phone are required');
-    }
     if (!message?.id || !message?.text?.trim()) {
       throw new Error('Message ID and text are required');
     }
 
-    return apiRequest('/api/customer/messages', {
+    const sessionToken = customerSessionStorage.get();
+    const headers = {};
+    if (sessionToken) {
+      headers['x-customer-session'] = sessionToken;
+    }
+
+    const response = await apiRequest('/api/customer/messages', {
       method: 'POST',
+      headers,
       body: {
         customer: {
-          id: customer.id.trim(),
-          name: customer.name.trim(),
-          phone: customer.phone.trim(),
+          id: customer?.id?.trim() || `anon_${Date.now().toString(36)}`,
+          name: customer?.name?.trim() || 'Guest Customer',
+          phone: customer?.phone?.trim() || '+10000000000',
         },
         message: {
           id: message.id.trim(),
@@ -34,33 +63,61 @@ export const customerService = {
       },
       requireAuth: false,
     });
+
+    if (response?.sessionToken) {
+      customerSessionStorage.set(response.sessionToken);
+    }
+
+    return response;
   },
 
   /**
-   * Fetch customer-visible messages for a conversation (public endpoint, strictly excludes drafts and internal data)
-   * @param {string} conversationId
-   * @returns {Promise<{ success: boolean, conversation: { id: string, status: string, messages: Array } }>}
+   * Fetch conversation and messages for the current customer session.
+   * Strictly isolated: only returns customer messages and approved agent replies.
    */
-  async getCustomerConversationMessages(conversationId) {
-    if (!conversationId) {
-      throw new Error('Conversation ID is required');
+  async getCustomerConversation(conversationId = null) {
+    const sessionToken = customerSessionStorage.get();
+
+    if (!sessionToken) {
+      return { conversation: null };
     }
 
+    const headers = {
+      'x-customer-session': sessionToken,
+    };
+
+    // If conversationId is supplied, use the ID-specific endpoint
+    const endpoint = conversationId
+      ? `/api/customer/conversations/${conversationId}/messages`
+      : '/api/customer/conversation';
+
     try {
-      return await apiRequest(`/api/conversations/${conversationId}/customer-messages`, {
+      return await apiRequest(endpoint, {
         method: 'GET',
+        headers,
         requireAuth: false,
       });
     } catch (error) {
-      // Fallback in case backend routing variation
-      if (error.status === 404 || error.status === 401) {
-        return await apiRequest(`/api/customer-conversations/${conversationId}/customer-messages`, {
-          method: 'GET',
-          requireAuth: false,
-        });
+      // If 404 or 401, session is invalid or belongs to another conversation
+      if (error.status === 401 || error.status === 404) {
+        // Return null conversation so UI handles empty/reset state
+        return { conversation: null, error: error.message };
       }
       throw error;
     }
   },
-};
 
+  /**
+   * Backwards-compatible alias for fetching conversation messages with session verification
+   */
+  async getCustomerConversationMessages(conversationId) {
+    return this.getCustomerConversation(conversationId);
+  },
+
+  /**
+   * Clear active customer session to start fresh
+   */
+  clearCustomerSession() {
+    customerSessionStorage.remove();
+  },
+};

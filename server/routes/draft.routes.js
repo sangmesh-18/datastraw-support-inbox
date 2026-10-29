@@ -1,4 +1,3 @@
-
 import express from "express";
 import {
   updateDraft,
@@ -9,5 +8,6 @@ const router = express.Router();
 
 router.patch("/:draftId", updateDraft);
 router.patch("/:draftId/approve", approveDraft);
+router.post("/:draftId/approve", approveDraft);
 
 export default router;
