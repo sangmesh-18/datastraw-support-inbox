@@ -1,0 +1,16 @@
+
+{
+  "version": 2,
+  "buildCommand": "npx prisma generate --schema=prisma/schema.prisma",
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api"
+    }
+  ]
+}
