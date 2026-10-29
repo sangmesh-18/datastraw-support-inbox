@@ -1,0 +1,16 @@
+{
+  "event_id": "evt_test_1009",
+  "type": "message.received",
+  "brand_id": "verdant-co",
+  "timestamp": "2026-10-28T14:30:00Z",
+  "customer": {
+    "id": "cust_test_1001",
+    "name": "Aisha Khan",
+    "phone": "+919800000001"
+  },
+  "message": {
+    "id": "msg_test_1009",
+    "type": "text",
+    "text": "Hi, my order has not arrived yet. Can you tell me when it will arrive?"
+  }
+}

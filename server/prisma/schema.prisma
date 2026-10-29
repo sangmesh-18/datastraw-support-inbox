@@ -1,0 +1,95 @@
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../generated/prisma"
+  moduleFormat           = "esm"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MessageSender {
+  CUSTOMER
+  AGENT
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+enum DraftStatus {
+  PENDING
+  APPROVED
+}
+
+
+enum AIProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+
+model Customer {
+  id         String         @id @default(cuid())
+  externalId String?        @unique
+  name       String
+  phone      String
+  createdAt  DateTime       @default(now())
+  conversations Conversation[]
+}
+
+model Conversation {
+  id        String             @id @default(cuid())
+  customerId String
+  status    ConversationStatus @default(OPEN)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  customer  Customer           @relation(fields: [customerId], references: [id])
+  messages  Message[]
+  brandId  String              @default("verdant-co")
+}
+
+model Message {
+  id         String       @id @default(cuid())
+  conversationId String
+  sender     MessageSender
+  text       String
+  createdAt  DateTime     @default(now())
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  draft      AIDraft?
+  externalId String? @unique
+  eventId    String? @unique
+  aiProcessingStatus AIProcessingStatus @default(PENDING)
+  aiProcessingAttempts Int @default(0)
+}
+
+model AIDraft {
+  id         String      @id @default(cuid())
+  messageId  String      @unique
+  text       String
+  status     DraftStatus @default(PENDING)
+  createdAt  DateTime    @default(now())
+  approvedAt DateTime?
+  message    Message     @relation(fields: [messageId], references: [id])
+}
+
+
+enum UserRole {
+  ADMIN
+  AGENT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(AGENT)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
