@@ -7,7 +7,7 @@ import {
   User as UserIcon,
   Sparkles,
   Shield,
-  ArrowRight,
+  
 } from 'lucide-react';
 import { Badge } from '../common/Badge';
 
@@ -100,12 +100,12 @@ export function Navbar() {
                   Agent Sign In
                 </Link>
               )}
-              {location.pathname !== '/register' && (
+              {/* {location.pathname !== '/register' && (
                 <Link to="/register" className="nav-register-btn">
                   <span>Register Agent</span>
                   <ArrowRight size={14} />
                 </Link>
-              )}
+              )} */}
             </div>
           )}
         </div>

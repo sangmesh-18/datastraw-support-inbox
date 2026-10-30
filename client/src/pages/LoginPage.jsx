@@ -5,7 +5,7 @@ import { useToast } from '../hooks/useToast';
 import { Input } from '../components/common/Input';
 import { Button } from '../components/common/Button';
 import { isValidEmail } from '../utils/validators';
-import { Mail, Lock, Sparkles, KeyRound } from 'lucide-react';
+import { Mail, Lock, Sparkles,} from 'lucide-react';
 
 export function LoginPage() {
   const { login, isLoading } = useAuth();
@@ -53,12 +53,12 @@ export function LoginPage() {
   };
 
   // Helper for one-click demo login during assessment review
-  const handleQuickDemoFill = () => {
-    setEmail('testagent@example.com');
-    setPassword('password123');
-    setErrors({});
-    setApiError('');
-  };
+  // const handleQuickDemoFill = () => {
+  //   setEmail('testagent@example.com');
+  //   setPassword('password123');
+  //   setErrors({});
+  //   setApiError('');
+  // };
 
   return (
     <div className="auth-page-container">
@@ -125,7 +125,7 @@ export function LoginPage() {
           </Button>
 
           {/* Quick Demo Fill button for reviewer convenience */}
-          <div className="demo-credentials-helper">
+          {/* <div className="demo-credentials-helper">
             <Button
               variant="outline"
               size="sm"
@@ -135,16 +135,16 @@ export function LoginPage() {
             >
               Fill Demo Credentials (testagent@example.com)
             </Button>
-          </div>
+          </div> */}
         </form>
 
         <div className="auth-footer">
-          <p>
+          {/* <p>
             Don't have an agent account yet?{' '}
             <Link to="/register" className="auth-link">
               Register here
             </Link>
-          </p>
+          </p> */}
           <div className="auth-customer-switch">
             <span>Looking for customer testing? </span>
             <Link to="/customer" className="auth-link-alt">
