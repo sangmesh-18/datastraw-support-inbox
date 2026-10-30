@@ -163,11 +163,6 @@ npm run dev
 
 ## Demo Credentials & Identity Setup
 
-### Agent Account (Pre-seeded & Tested)
-- **Email**: `testagent@example.com`
-- **Password**: `password123`
-- *Alternatively, click the **"Fill Demo Credentials"** button on the Login page.*
-
 ### Customer Test Identities (Quick-Select on `/customer`)
 - **Aisha Sharma**: Phone `+919876543210`, ID `customer_demo_101`
 - **Aisha Khan**: Phone `+919800000001`, ID `cust_test_1001`
